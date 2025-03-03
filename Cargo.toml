@@ -2,6 +2,8 @@
 name = "inf-rs"
 version = "0.1.0"
 edition = "2024"
+license = "Apache-2.0"
+description = "INF file parse library"
 
 [dependencies]
 encoding_rs = "0.8.35"
