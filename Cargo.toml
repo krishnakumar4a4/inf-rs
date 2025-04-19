@@ -7,3 +7,4 @@ description = "INF file parse library"
 
 [dependencies]
 encoding_rs = "0.8.35"
+nom = "8.0.0"
