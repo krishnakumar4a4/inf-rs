@@ -8,3 +8,4 @@ description = "INF file parse library"
 [dependencies]
 encoding_rs = "0.8.35"
 nom = "8.0.0"
+log = "0.4.25"
