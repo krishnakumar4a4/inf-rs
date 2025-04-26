@@ -11,38 +11,55 @@ pub use crate::types::{InfEntry, InfSection, InfValue};
 
 mod types;
 
+/// Errors that can occur while parsing a Windows INF file
 #[derive(Debug, thiserror::Error)]
 pub enum WinInfFileError {
+    /// The specified file does not exist
     #[error("File does not exist")]
     FileDoNotExist,
+    /// Failed to open the file
     #[error("Failed to open file: {0}")]
     FileOpenError(#[from] Error),
+    /// Failed to read the file contents
     #[error("Failed to read file")]
     FileReadError,
+    /// Failed to read a line from the file
     #[error("Failed to read line: {0}")]
     ReadLineError(#[from] LineReaderError),
+    /// Failed to parse a section in the file
     #[error("Failed to parse section: {0}")]
     SectionParseError(#[from] SectionReaderError),
 }
 
+/// Errors that can occur while reading lines from a file
 #[derive(Debug, thiserror::Error)]
 pub enum LineReaderError {
+    /// Invalid CRLF sequence found in the file
     #[error("Invalid CRLF sequence: {0}")]
     InvalidCrlf(String),
 }
 
+/// Errors that can occur while parsing sections in a file
 #[derive(Debug, thiserror::Error)]
 pub enum SectionReaderError {
+    /// Invalid section name found in the file
     #[error("Invalid section name: {0}")]
     InvalidSectionName(String),
+    /// Invalid quoted value found in a section
     #[error("Invalid quoted value: {0}")]
     InvalidQuotedValue(String),
+    /// Invalid line continuation found in a section
     #[error("Invalid continuation: {0}")]
     InvalidContinuation(String),
 }
 
+/// A Windows INF file parser
+/// 
+/// This struct provides functionality to parse Windows INF files and access their contents.
+/// INF files are used for device driver installation and configuration in Windows.
 #[derive(Default)]
 pub struct WinInfFile {
+    /// The sections contained in the INF file
     pub sections: HashMap<String, InfSection>,
     section_reader: SectionReader
 }
@@ -241,6 +258,27 @@ impl SectionReader {
 }
 
 impl WinInfFile {
+    /// Parse a Windows INF file from the given path
+    /// 
+    /// # Arguments
+    /// 
+    /// * `file_path` - The path to the INF file to parse
+    /// 
+    /// # Returns
+    /// 
+    /// * `Ok(())` if the file was parsed successfully
+    /// * `Err(WinInfFileError)` if an error occurred during parsing
+    /// 
+    /// # Examples
+    /// 
+    /// ```
+    /// use inf_rs::WinInfFile;
+    /// use std::path::PathBuf;
+    /// 
+    /// let mut inf_file = WinInfFile::default();
+    /// let result = inf_file.parse(PathBuf::from("path/to/file.inf"));
+    /// assert!(result.is_ok());
+    /// ```
     pub fn parse(&mut self, file_path: PathBuf) -> Result<(), WinInfFileError> {
         if !file_path.exists() {
             return Err(WinInfFileError::FileDoNotExist);
