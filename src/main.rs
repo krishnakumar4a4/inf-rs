@@ -1,7 +1,5 @@
-use std::collections::HashMap;
 use std::env::current_dir;
-use std::path::{Path, PathBuf};
-use inf_rs::{WinInfFile, WinInfFileParseError};
+use inf_rs::WinInfFile;
 
 fn main() {
     let cwd = current_dir().unwrap();

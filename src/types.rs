@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 #[derive(Debug, PartialEq)]
 pub enum InfValue {
-    String(String),
     // INF values can be complex, like comma-separated lists or numbers.
     // For simplicity, we'll treat most as strings initially.
     // You could extend this to handle specific value types if needed.
