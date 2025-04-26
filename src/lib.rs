@@ -6,6 +6,7 @@ use std::io::{Error, Read};
 use std::path::PathBuf;
 
 use encoding_rs::{Encoding, UTF_16LE};
+use log::{debug, trace};
 
 pub use crate::types::{InfEntry, InfSection, InfValue};
 
@@ -157,13 +158,13 @@ impl SectionReader {
 
         // entries
         if !self.last_section_name.is_empty() {
-            println!("processing entries for section name: {}", self.last_section_name);
+            debug!("processing entries for section name: {}", self.last_section_name);
             if let Some((key, value)) = line.split_once('=') {
                 let key = key.trim();
                 let mut value = value.trim();
 
                 if value.starts_with('"') {
-                    println!("processing quoted value: {}", value);
+                    debug!("processing quoted value: {}", value);
                     let end_double_quote_idx = value[1..].find('"');
                     if end_double_quote_idx.is_none() {
                         return Err(SectionReaderError::InvalidQuotedValue(format!(
@@ -200,7 +201,7 @@ impl SectionReader {
                     }
 
                 } else {
-                    println!("processing unquoted value: {}", value);
+                    debug!("processing unquoted value: {}", value);
 
                     // value containing comments at the end
                     if let Some((first, _)) = value.split_once(';') {
@@ -209,7 +210,7 @@ impl SectionReader {
 
                     // multiple backslashes at the end, windows treat only the last one as line continuator and ignores rest
                     if value.ends_with('\\') {
-                        println!("processing unquoted contd value: {}", value);
+                        debug!("processing unquoted contd value: {}", value);
                         if let Some(first_backslash_idx) = value.find('\\') {
                             if first_backslash_idx > 0 {
                                 self.last_entry_value_contd = value[..first_backslash_idx].to_string();
@@ -222,7 +223,7 @@ impl SectionReader {
                             }
                         }
                     } else {
-                        println!("processing unquoted non contd value: {}", value);
+                        debug!("processing unquoted non contd value: {}", value);
                         self.last_entry_value_contd.clear();
                         self.last_entry_key.clear();
 
@@ -276,7 +277,7 @@ impl WinInfFile {
     /// use std::path::PathBuf;
     /// 
     /// let mut inf_file = WinInfFile::default();
-    /// let result = inf_file.parse(PathBuf::from("path/to/file.inf"));
+    /// let result = inf_file.parse(PathBuf::from("tests/fixtures/Intel.inf"));
     /// assert!(result.is_ok());
     /// ```
     pub fn parse(&mut self, file_path: PathBuf) -> Result<(), WinInfFileError> {
@@ -299,7 +300,7 @@ impl WinInfFile {
             }
             let read_count = read_count.unwrap();
             if read_count <= 0 {
-                println!("bytes read: {}", read_count);
+                trace!("bytes read: {}", read_count);
                 break;
             }
 
@@ -307,7 +308,7 @@ impl WinInfFile {
             // Bom data: (Encoding { UTF-16LE }, 2)
             let bom = Encoding::for_bom(&buf[..read_count]);
             if let Some(b) = bom {
-                println!("Bom data: {b:?}");
+                debug!("Bom data: {b:?}");
                 bom_detected = true;
             }
 
@@ -316,14 +317,12 @@ impl WinInfFile {
                 // Ref: https://learn.microsoft.com/en-us/windows-hardware/drivers/display/general-unicode-requirement
                 let mut utf16_buf = vec![0; buf_size/2];
                 let res = decoder.decode_to_utf16(&buf[..read_count], &mut utf16_buf, read_count != buf_size);
-                println!("result: {res:?}");
-                println!("decoded chars: {:?}", String::from_utf16_lossy(&utf16_buf[..res.2]));
+                debug!("decoded chars: {:?}", String::from_utf16_lossy(&utf16_buf[..res.2]));
                 if let Err(e) = line_reader.read_to_line(&String::from_utf16_lossy(&utf16_buf[..res.2])) {
                     return Err(WinInfFileError::ReadLineError(e));
                 }
             } else {
-                // This works if the file is UTF-8
-                println!("decoded chars: {:?}", String::from_utf8_lossy(&buf[..read_count]));
+                debug!("decoded chars: {:?}", String::from_utf8_lossy(&buf[..read_count]));
                 if let Err(e) = line_reader.read_to_line(&String::from_utf8_lossy(&buf[..read_count]).to_string()) {
                     return Err(WinInfFileError::ReadLineError(e));
                 }
@@ -343,13 +342,13 @@ impl WinInfFile {
             }
         }
 
-        println!("total lines: {}", line_reader.lines.len());
+        debug!("total lines: {}", line_reader.lines.len());
         for line in line_reader.lines.iter() {
-            println!(">> line: {}", line);
+            debug!(">> line: {}", line);
         }
 
         for (section_name, section) in self.sections.iter() {
-            println!(">> section name: {}, section: {:?}", section_name, section);
+            debug!(">> section name: {}, section: {:?}", section_name, section);
         }
 
         Ok(())
@@ -357,7 +356,7 @@ impl WinInfFile {
 }
 
 fn validate_section_name<'a>(name: String) -> Result<(), &'a str> {
-    println!("validate section name: {}", name);
+    debug!("validate section name: {}", name);
     if name.starts_with('\"') {
         // quoted section name
         // double quotes within are also allowed when escaped
