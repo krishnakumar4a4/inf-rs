@@ -8,9 +8,38 @@ use std::path::PathBuf;
 use encoding_rs::{Encoding, UTF_16LE};
 
 use crate::types::{InfEntry, InfSection, InfValue};
-use crate::WinInfFileParseError::{FileDoNotExist, FileOpenError, FileReadError};
 
 mod types;
+
+#[derive(Debug, thiserror::Error)]
+pub enum WinInfFileError {
+    #[error("File does not exist")]
+    FileDoNotExist,
+    #[error("Failed to open file: {0}")]
+    FileOpenError(#[from] Error),
+    #[error("Failed to read file")]
+    FileReadError,
+    #[error("Failed to read line: {0}")]
+    ReadLineError(#[from] LineReaderError),
+    #[error("Failed to parse section: {0}")]
+    SectionParseError(#[from] SectionReaderError),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum LineReaderError {
+    #[error("Invalid CRLF sequence: {0}")]
+    InvalidCrlf(String),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum SectionReaderError {
+    #[error("Invalid section name: {0}")]
+    InvalidSectionName(String),
+    #[error("Invalid quoted value: {0}")]
+    InvalidQuotedValue(String),
+    #[error("Invalid continuation: {0}")]
+    InvalidContinuation(String),
+}
 
 #[derive(Default)]
 pub struct WinInfFile {
@@ -25,14 +54,14 @@ struct LineReader {
 }
 
 impl LineReader {
-    fn read_to_line(&mut self, line_part: &str) -> Result<(), &str>{
-        self.remaining_string.push_str(line_part);
+    fn read_to_line(&mut self, line_part: &str) -> Result<(), LineReaderError> {
         let mut found_cr = false;
-        let mut new_line = String::from("");
-        for c in self.remaining_string.clone().chars() {
+        // pre-allocate memory for the new line at one shot and reuse it
+        let mut new_line = String::with_capacity(self.remaining_string.len() + line_part.len());
+        for c in self.remaining_string.chars().chain(line_part.chars()) {
             // If LF did not follow CR, fail
             if found_cr && c != '\n' {
-                return Err("invalid crlf char, found \r but not \n immediately")
+                return Err(LineReaderError::InvalidCrlf(format!("found \\r but not \\n immediately")));
             }
             // If CRLF encountered, read to line
             if found_cr && c == '\n' {
@@ -44,11 +73,13 @@ impl LineReader {
                 continue
             }
 
+            // If CR encountered, set flag
             if c == '\r' {
                 found_cr = true;
                 continue
             }
 
+            // If \n encountered, read to line
             if c == '\n' {
                 if new_line.len() != 0 {
                     self.lines.push(new_line.clone());
@@ -57,15 +88,17 @@ impl LineReader {
                 continue
             }
 
+            // Add each char to the new line
             new_line.push(c);
         }
+
+        // Add remaining line part without line ending back to the reader
         self.remaining_string = new_line;
         Ok(())
     }
 
     fn take_lines(&mut self) -> Vec<String> {
-        let lines: Vec<String> = self.lines.drain(0..).collect();
-        lines
+        self.lines.drain(0..).collect()
     }
 
     fn finalize(&mut self) {
@@ -83,9 +116,9 @@ struct SectionReader {
 }
 
 impl SectionReader {
-    fn read_section(&mut self, line: String, sections: &mut HashMap<String, InfSection>) -> Result<(), String> {
-        // trim spaces both sides
-        let line = line.trim_start().trim_end();
+    fn read_section(&mut self, line: String, sections: &mut HashMap<String, InfSection>) -> Result<(), SectionReaderError> {
+        // trim spaces and tabs
+        let line = line.trim();
 
         // exclude comments
         if line.starts_with(';') {
@@ -96,7 +129,7 @@ impl SectionReader {
         if line.starts_with('[') && line.ends_with(']') {
             let section_name = line[1..line.len()-1].to_string();
             if let Err(e) = validate_section_name(section_name.clone()) {
-                return Err(e.to_string());
+                return Err(SectionReaderError::InvalidSectionName(e.to_string()));
             }
 
             // TODO: if there are multiple sections with same name, we have to merge them
@@ -109,14 +142,17 @@ impl SectionReader {
         if !self.last_section_name.is_empty() {
             println!("processing entries for section name: {}", self.last_section_name);
             if let Some((key, value)) = line.split_once('=') {
-                let key = key.trim_start().trim_end();
-                let mut value = value.trim_start().trim_end();
+                let key = key.trim();
+                let mut value = value.trim();
 
                 if value.starts_with('"') {
                     println!("processing quoted value: {}", value);
                     let end_double_quote_idx = value[1..].find('"');
                     if end_double_quote_idx.is_none() {
-                        return Err(format!("Invalid INF entry value: {}, no ending double quote found, key:{}, section_name: {}", value, key, self.last_section_name));
+                        return Err(SectionReaderError::InvalidQuotedValue(format!(
+                            "no ending double quote found, key: {}, section: {}", 
+                            key, self.last_section_name
+                        )));
                     }
                     // +1 to include the first double quote
                     let end_double_quote_idx = end_double_quote_idx.unwrap()+1usize;
@@ -130,8 +166,10 @@ impl SectionReader {
                                 return Ok(());
                             } else if c != ';' {
                                 // TODO: if there are any chars after ending double quote apart from continuation char or comment, should we consider this as malformed value?
-                                return Err(format!("Invalid INF entry value: {}, no continuation char found after ending double quote, key:{}, section_name: {}", 
-                                    value, key, self.last_section_name));
+                                return Err(SectionReaderError::InvalidContinuation(format!(
+                                    "Invalid INF entry value: {}, no continuation char found after ending double quote, key: {}, section_name: {}", 
+                                    value, key, self.last_section_name
+                                )));
                             }
                         }
                     }
@@ -149,7 +187,7 @@ impl SectionReader {
 
                     // value containing comments at the end
                     if let Some((first, _)) = value.split_once(';') {
-                        value = first.trim_start().trim_end();
+                        value = first.trim();
                     }
 
                     // multiple backslashes at the end, windows treat only the last one as line continuator and ignores rest
@@ -178,7 +216,7 @@ impl SectionReader {
                 }
             }
             else {
-                let value = line.trim_start().trim_end();
+                let value = line.trim();
 
                 if !self.last_entry_value_contd.is_empty() {
                     if let Some(entry) = sections.get_mut(&self.last_section_name) {
@@ -197,27 +235,13 @@ impl SectionReader {
     }
 }
 
-#[derive(Debug)]
-pub enum WinInfFileParseError {
-    FileDoNotExist(),
-    FileOpenError(Error),
-    FileReadError(),
-    ReadLineError(String),
-    SectionParseError(String)
-}
-
 impl WinInfFile {
-    pub fn parse(&mut self, file_path: PathBuf) -> Result<(), WinInfFileParseError> {
-        // check if file exists
+    pub fn parse(&mut self, file_path: PathBuf) -> Result<(), WinInfFileError> {
         if !file_path.exists() {
-            return Err(FileDoNotExist());
+            return Err(WinInfFileError::FileDoNotExist);
         }
 
-        let f = File::open(file_path);
-        if f.as_ref().is_err() {
-            return Err(FileOpenError(f.err().unwrap()));
-        }
-        let mut f = f.unwrap();
+        let mut f = File::open(file_path)?;
         let mut decoder = UTF_16LE.new_decoder();
 
         let mut line_reader = LineReader::default();
@@ -228,7 +252,7 @@ impl WinInfFile {
             let mut buf: Vec<u8> = vec![0; buf_size];
             let read_count = f.read(&mut buf);
             if read_count.is_err() {
-                return Err(FileReadError())
+                return Err(WinInfFileError::FileReadError);
             }
             let read_count = read_count.unwrap();
             if read_count <= 0 {
@@ -252,19 +276,19 @@ impl WinInfFile {
                 println!("result: {res:?}");
                 println!("decoded chars: {:?}", String::from_utf16_lossy(&utf16_buf[..res.2]));
                 if let Err(e) = line_reader.read_to_line(&String::from_utf16_lossy(&utf16_buf[..res.2])) {
-                    return Err(WinInfFileParseError::ReadLineError(e.to_string()));
+                    return Err(WinInfFileError::ReadLineError(e));
                 }
             } else {
                 // This works if the file is UTF-8
                 println!("decoded chars: {:?}", String::from_utf8_lossy(&buf[..read_count]));
                 if let Err(e) = line_reader.read_to_line(&String::from_utf8_lossy(&buf[..read_count]).to_string()) {
-                    return Err(WinInfFileParseError::ReadLineError(e.to_string()));
+                    return Err(WinInfFileError::ReadLineError(e));
                 }
             }
 
             for line in line_reader.take_lines() {
                 if let Err(e) = self.section_reader.read_section(line, &mut self.sections) {
-                    return Err(WinInfFileParseError::SectionParseError(e.to_string()))
+                    return Err(WinInfFileError::SectionParseError(e));
                 }
             }
         }
@@ -272,7 +296,7 @@ impl WinInfFile {
         line_reader.finalize();
         for line in line_reader.take_lines() {
             if let Err(e) = self.section_reader.read_section(line, &mut self.sections) {
-                return Err(WinInfFileParseError::SectionParseError(e.to_string()))
+                return Err(WinInfFileError::SectionParseError(e));
             }
         }
 
@@ -289,7 +313,7 @@ impl WinInfFile {
     }
 }
 
-fn validate_section_name<'a>(name: String) -> Result<(), &'a str>{
+fn validate_section_name<'a>(name: String) -> Result<(), &'a str> {
     println!("validate section name: {}", name);
     if name.starts_with('\"') {
         // quoted section name
@@ -301,15 +325,15 @@ fn validate_section_name<'a>(name: String) -> Result<(), &'a str>{
         if name.contains(']') {
             return Err("invalid ] in the quoted section name");
         }
-
-        return Ok(())
+        Ok(())
     } else {
         // unquoted section name
         if name.ends_with('\\') {
             return Err("invalid \\ at the end of section name");
         }
 
-        if name.matches('%').count() % 2 == 1 {
+        // count the number of % in the section name
+        if name.chars().filter(|c| *c == '%').count() % 2 != 0 {
             return Err("odd number of % in the section name, expected pairs");
         }
 
