@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum InfValue {
     // INF values can be complex, like comma-separated lists or numbers.
     // For simplicity, we'll treat most as strings initially.
@@ -10,13 +10,13 @@ pub enum InfValue {
     Raw(String),
 }
 
-#[derive(Debug, PartialEq)]
-pub struct InfEntry {
-    pub key: String,
-    pub value: Option<InfValue>,
+#[derive(Debug, Clone, PartialEq)]
+pub enum InfEntry {
+    KeyValue(String, Option<InfValue>),
+    OnlyValue(InfValue),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct InfSection {
     pub name: String,
     pub entries: Vec<InfEntry>,

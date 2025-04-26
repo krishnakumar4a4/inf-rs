@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use encoding_rs::{Encoding, UTF_16LE};
 
-use crate::types::{InfEntry, InfSection, InfValue};
+pub use crate::types::{InfEntry, InfSection, InfValue};
 
 mod types;
 
@@ -43,7 +43,7 @@ pub enum SectionReaderError {
 
 #[derive(Default)]
 pub struct WinInfFile {
-    sections: HashMap<String, InfSection>,
+    pub sections: HashMap<String, InfSection>,
     section_reader: SectionReader
 }
 
@@ -178,7 +178,7 @@ impl SectionReader {
                     // exclude double quotes
                     value = &value[1..end_double_quote_idx];
                     if let Some(section) = sections.get_mut(&self.last_section_name) {
-                        let new_entry = InfEntry{ key: key.to_string(), value: Some(InfValue::Raw(value.to_string())) };
+                        let new_entry = InfEntry::KeyValue(key.to_string(), Some(InfValue::Raw(value.to_string())) );
                         section.entries.push(new_entry);
                     }
 
@@ -210,7 +210,7 @@ impl SectionReader {
                         self.last_entry_key.clear();
 
                         if let Some(entry) = sections.get_mut(&self.last_section_name) {
-                            entry.entries.push(InfEntry{ key: key.to_string(), value: Some(InfValue::Raw(value.to_string())) })
+                            entry.entries.push(InfEntry::KeyValue(key.to_string(), Some(InfValue::Raw(value.to_string())) ))
                         }
                     }
                 }
@@ -218,16 +218,21 @@ impl SectionReader {
             else {
                 let value = line.trim();
 
+                // TODO: what if there are multiple continuation lines?
                 if !self.last_entry_value_contd.is_empty() {
                     if let Some(entry) = sections.get_mut(&self.last_section_name) {
                         self.last_entry_value_contd.push_str(value);
-                        entry.entries.push(InfEntry{ 
-                            key: self.last_entry_key.to_string(), 
-                            value: Some(InfValue::Raw(self.last_entry_value_contd.clone()))
-                        });
+                        entry.entries.push(InfEntry::KeyValue(
+                            self.last_entry_key.to_string(), 
+                            Some(InfValue::Raw(self.last_entry_value_contd.clone()))
+                        ));
                     }
                     self.last_entry_value_contd.clear();
                     self.last_entry_key.clear();
+                } else {
+                    if let Some(entry) = sections.get_mut(&self.last_section_name) {
+                        entry.entries.push(InfEntry::OnlyValue(InfValue::Raw(value.to_string())));
+                    }
                 }
             }
         }
@@ -398,8 +403,12 @@ mod tests {
         assert!(reader.read_section("key=value".to_string(), &mut sections).is_ok());
         let section = sections.get("TestSection").unwrap();
         assert_eq!(section.entries.len(), 1);
-        assert_eq!(section.entries[0].key, "key");
-        assert_eq!(section.entries[0].value.as_ref().unwrap(), &InfValue::Raw("value".to_string()));
+        if let InfEntry::KeyValue(key, value) = &section.entries[0] {
+            assert_eq!(key, "key");
+            assert_eq!(value.as_ref().unwrap(), &InfValue::Raw("value".to_string()));
+        } else {
+            panic!("Expected KeyValue entry");
+        }
     }
 
     #[test]
@@ -412,8 +421,12 @@ mod tests {
         
         let section = sections.get("TestSection").unwrap();
         assert_eq!(section.entries.len(), 1);
-        assert_eq!(section.entries[0].key, "key");
-        assert_eq!(section.entries[0].value.as_ref().unwrap(), &InfValue::Raw("quoted value".to_string()));
+        if let InfEntry::KeyValue(key, value) = &section.entries[0] {
+            assert_eq!(key, "key");
+            assert_eq!(value.as_ref().unwrap(), &InfValue::Raw("quoted value".to_string()));
+        } else {
+            panic!("Expected KeyValue entry");
+        }
     }
 
     #[test]
@@ -429,8 +442,12 @@ mod tests {
         assert!(reader.read_section("  continued value  ".to_string(), &mut sections).is_ok());
         let section = sections.get("TestSection").unwrap();
         assert_eq!(section.entries.len(), 1);
-        assert_eq!(section.entries[0].key, "key");
-        assert_eq!(section.entries[0].value.as_ref().unwrap(), &InfValue::Raw("quoted value\\continued value".to_string()));
+        if let InfEntry::KeyValue(key, value) = &section.entries[0] {
+            assert_eq!(key, "key");
+            assert_eq!(value.as_ref().unwrap(), &InfValue::Raw("quoted value\\continued value".to_string()));
+        } else {
+            panic!("Expected KeyValue entry");
+        }
     }
 
     #[test]
@@ -445,8 +462,12 @@ mod tests {
         assert!(reader.read_section("continued".to_string(), &mut sections).is_ok());
         let section = sections.get("TestSection").unwrap();
         assert_eq!(section.entries.len(), 1);
-        assert_eq!(section.entries[0].key, "key");
-        assert_eq!(section.entries[0].value.as_ref().unwrap(), &InfValue::Raw("valuecontinued".to_string()));
+        if let InfEntry::KeyValue(key, value) = &section.entries[0] {
+            assert_eq!(key, "key");
+            assert_eq!(value.as_ref().unwrap(), &InfValue::Raw("valuecontinued".to_string()));
+        } else {
+            panic!("Expected KeyValue entry");
+        }
     }
 
     #[test]
@@ -460,8 +481,12 @@ mod tests {
         
         let section = sections.get("TestSection").unwrap();
         assert_eq!(section.entries.len(), 1);
-        assert_eq!(section.entries[0].key, "key");
-        assert_eq!(section.entries[0].value.as_ref().unwrap(), &InfValue::Raw("value".to_string()));
+        if let InfEntry::KeyValue(key, value) = &section.entries[0] {
+            assert_eq!(key, "key");
+            assert_eq!(value.as_ref().unwrap(), &InfValue::Raw("value".to_string()));
+        } else {
+            panic!("Expected KeyValue entry");
+        }
     }
 
     #[test]
