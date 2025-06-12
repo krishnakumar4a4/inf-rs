@@ -231,6 +231,224 @@ fn test_audiocodec_inf_parsing() {
 }
 
 #[test]
+fn test_sampledisplay_inf_parsing() {
+    let mut inf_file = WinInfFile::default();
+    let inf_path = PathBuf::from("tests/fixtures/SampleDisplay.inf");
+    
+    // Test basic parsing
+    assert!(inf_file.parse(inf_path).is_ok());
+    
+    // Test version section
+    let version_section = inf_file.sections.get("Version").unwrap();
+    assert_eq!(version_section.entries.len(), 7);
+    let (key, value) = read_key_value(version_section.entries[0].clone()).unwrap();
+    assert_eq!(key, "Signature");
+    assert_eq!(value.unwrap(), InfValue::Raw("$Windows NT$".to_string()));
+
+    let (key, value) = read_key_value(version_section.entries[1].clone()).unwrap();
+    assert_eq!(key, "Class");
+    assert_eq!(value.unwrap(), InfValue::Raw("Display".to_string()));
+
+    let (key, value) = read_key_value(version_section.entries[2].clone()).unwrap();
+    assert_eq!(key, "ClassGUID");
+    assert_eq!(value.unwrap(), InfValue::Raw("{4d36e968-e325-11ce-bfc1-08002be10318}".to_string()));
+
+    let (key, value) = read_key_value(version_section.entries[3].clone()).unwrap();
+    assert_eq!(key, "Provider");
+    assert_eq!(value.unwrap(), InfValue::Raw("%ProviderString%".to_string()));
+
+    let (key, value) = read_key_value(version_section.entries[4].clone()).unwrap();
+    assert_eq!(key, "DriverVer");
+    assert_eq!(value.unwrap(), InfValue::Raw("03/15/2011, 0.03.15.0011".to_string()));
+
+    let (key, value) = read_key_value(version_section.entries[5].clone()).unwrap();
+    assert_eq!(key, "CatalogFile");
+    assert_eq!(value.unwrap(), InfValue::Raw("SampleDisplay.cat".to_string()));
+
+    let (key, value) = read_key_value(version_section.entries[6].clone()).unwrap();
+    assert_eq!(key, "PnpLockdown");
+    assert_eq!(value.unwrap(), InfValue::Raw("1".to_string()));
+
+    // Test DestinationDirs section
+    let dest_dirs_section = inf_file.sections.get("DestinationDirs").unwrap();
+    let (key, value) = read_key_value(dest_dirs_section.entries[0].clone()).unwrap();
+    assert_eq!(key, "KDODSamp.Files");
+    assert_eq!(value.unwrap(), InfValue::Raw("12".to_string()));
+
+    // Test SourceDisksNames section
+    let src_disks_names_section = inf_file.sections.get("SourceDisksNames").unwrap();
+    let (key, value) = read_key_value(src_disks_names_section.entries[0].clone()).unwrap();
+    assert_eq!(key, "0");
+    assert_eq!(value.unwrap(), InfValue::Raw("%SampleDisk%".to_string()));
+
+    // Test SourceDisksFiles section
+    let src_disks_files_section = inf_file.sections.get("SourceDisksFiles").unwrap();
+    let (key, value) = read_key_value(src_disks_files_section.entries[0].clone()).unwrap();
+    assert_eq!(key, "SampleDisplay.sys");
+    assert_eq!(value.unwrap(), InfValue::Raw("0".to_string()));
+
+    // Test Manufacturer section
+    let manufacturer_section = inf_file.sections.get("Manufacturer").unwrap();
+    let (key, value) = read_key_value(manufacturer_section.entries[0].clone()).unwrap();
+    assert_eq!(key, "%ManufacturerName%");
+    assert_eq!(value.unwrap(), InfValue::Raw("Standard,NTamd64,NTarm,NTarm64".to_string()));
+
+    // Test Standard.NTamd64 section
+    let std_ntamd64_section = inf_file.sections.get("Standard.NTamd64").unwrap();
+    assert_eq!(std_ntamd64_section.entries.len(), 4);
+    let (key, value) = read_key_value(std_ntamd64_section.entries[0].clone()).unwrap();
+    assert_eq!(key, "%SampleDeviceName%");
+    assert_eq!(value.unwrap(), InfValue::Raw("KDODSamp_Inst, PCI\\CC_0300".to_string()));
+    let (key, value) = read_key_value(std_ntamd64_section.entries[1].clone()).unwrap();
+    assert_eq!(key, "%SampleDeviceName%");
+    assert_eq!(value.unwrap(), InfValue::Raw("KDODSamp_Inst, PCI\\CC_0301".to_string()));
+    let (key, value) = read_key_value(std_ntamd64_section.entries[2].clone()).unwrap();
+    assert_eq!(key, "%SampleDeviceName%");
+    assert_eq!(value.unwrap(), InfValue::Raw("KDODSamp_Inst, ACPI\\CLS_0003&SUBCLS_0000".to_string()));
+    let (key, value) = read_key_value(std_ntamd64_section.entries[3].clone()).unwrap();
+    assert_eq!(key, "%SampleDeviceName%");
+    assert_eq!(value.unwrap(), InfValue::Raw("KDODSamp_Inst, ACPI\\CLS_0003&SUBCLS_0001".to_string()));
+
+    // Test Standard.NTarm section
+    let std_ntarm_section = inf_file.sections.get("Standard.NTarm").unwrap();
+    assert_eq!(std_ntarm_section.entries.len(), 4);
+    let (key, value) = read_key_value(std_ntarm_section.entries[0].clone()).unwrap();
+    assert_eq!(key, "%SampleDeviceName%");
+    assert_eq!(value.unwrap(), InfValue::Raw("KDODSamp_Inst, PCI\\CC_0300".to_string()));
+    let (key, value) = read_key_value(std_ntarm_section.entries[1].clone()).unwrap();
+    assert_eq!(key, "%SampleDeviceName%");
+    assert_eq!(value.unwrap(), InfValue::Raw("KDODSamp_Inst, PCI\\CC_0301".to_string()));
+    let (key, value) = read_key_value(std_ntarm_section.entries[2].clone()).unwrap();
+    assert_eq!(key, "%SampleDeviceName%");
+    assert_eq!(value.unwrap(), InfValue::Raw("KDODSamp_Inst, ACPI\\CLS_0003&SUBCLS_0000".to_string()));
+    let (key, value) = read_key_value(std_ntarm_section.entries[3].clone()).unwrap();
+    assert_eq!(key, "%SampleDeviceName%");
+    assert_eq!(value.unwrap(), InfValue::Raw("KDODSamp_Inst, ACPI\\CLS_0003&SUBCLS_0001".to_string()));
+
+    // Test Standard.NTarm64 section
+    let std_ntarm64_section = inf_file.sections.get("Standard.NTarm64").unwrap();
+    assert_eq!(std_ntarm64_section.entries.len(), 4);
+    let (key, value) = read_key_value(std_ntarm64_section.entries[0].clone()).unwrap();
+    assert_eq!(key, "%SampleDeviceName%");
+    assert_eq!(value.unwrap(), InfValue::Raw("KDODSamp_Inst, PCI\\CC_0300".to_string()));
+    let (key, value) = read_key_value(std_ntarm64_section.entries[1].clone()).unwrap();
+    assert_eq!(key, "%SampleDeviceName%");
+    assert_eq!(value.unwrap(), InfValue::Raw("KDODSamp_Inst, PCI\\CC_0301".to_string()));
+    let (key, value) = read_key_value(std_ntarm64_section.entries[2].clone()).unwrap();
+    assert_eq!(key, "%SampleDeviceName%");
+    assert_eq!(value.unwrap(), InfValue::Raw("KDODSamp_Inst, ACPI\\CLS_0003&SUBCLS_0000".to_string()));
+    let (key, value) = read_key_value(std_ntarm64_section.entries[3].clone()).unwrap();
+    assert_eq!(key, "%SampleDeviceName%");
+    assert_eq!(value.unwrap(), InfValue::Raw("KDODSamp_Inst, ACPI\\CLS_0003&SUBCLS_0001".to_string()));
+
+    // Test KDODSamp_Inst section
+    let kdodsamp_inst_section = inf_file.sections.get("KDODSamp_Inst").unwrap();
+    let (key, value) = read_key_value(kdodsamp_inst_section.entries[0].clone()).unwrap();
+    assert_eq!(key, "FeatureScore");
+    assert_eq!(value.unwrap(), InfValue::Raw("F9".to_string()));
+    let (key, value) = read_key_value(kdodsamp_inst_section.entries[1].clone()).unwrap();
+    assert_eq!(key, "CopyFiles");
+    assert_eq!(value.unwrap(), InfValue::Raw("KDODSamp.Files".to_string()));
+
+    // Test KDODSamp_Inst.Services section
+    let kdodsamp_inst_services_section = inf_file.sections.get("KDODSamp_Inst.Services").unwrap();
+    let (key, value) = read_key_value(kdodsamp_inst_services_section.entries[0].clone()).unwrap();
+    assert_eq!(key, "AddService");
+    assert_eq!(value.unwrap(), InfValue::Raw("KDODSamp,0x00000002,KDODSamp_Service_Inst,KDODSamp_EventLog_Inst".to_string()));
+
+    // Test KDODSamp_Service_Inst section
+    let kdodsamp_service_inst_section = inf_file.sections.get("KDODSamp_Service_Inst").unwrap();
+    let (key, value) = read_key_value(kdodsamp_service_inst_section.entries[0].clone()).unwrap();
+    assert_eq!(key, "ServiceType");
+    assert_eq!(value.unwrap(), InfValue::Raw("%SERVICE_KERNEL_DRIVER%".to_string()));
+    let (key, value) = read_key_value(kdodsamp_service_inst_section.entries[1].clone()).unwrap();
+    assert_eq!(key, "StartType");
+    assert_eq!(value.unwrap(), InfValue::Raw("%SERVICE_DEMAND_START%".to_string()));
+    let (key, value) = read_key_value(kdodsamp_service_inst_section.entries[2].clone()).unwrap();
+    assert_eq!(key, "ErrorControl");
+    assert_eq!(value.unwrap(), InfValue::Raw("%SERVICE_ERROR_IGNORE%".to_string()));
+    let (key, value) = read_key_value(kdodsamp_service_inst_section.entries[3].clone()).unwrap();
+    assert_eq!(key, "ServiceBinary");
+    assert_eq!(value.unwrap(), InfValue::Raw("%12%\\SampleDisplay.sys".to_string()));
+
+    // Test KDODSamp.Files section
+    let kdodsamp_files_section = inf_file.sections.get("KDODSamp.Files").unwrap();
+    let value = read_value_only(kdodsamp_files_section.entries[0].clone()).unwrap();
+    assert_eq!(value, InfValue::Raw("SampleDisplay.sys".to_string()));
+
+    // Test KDODSamp_EventLog_Inst section
+    let kdodsamp_eventlog_inst_section = inf_file.sections.get("KDODSamp_EventLog_Inst").unwrap();
+    let (key, value) = read_key_value(kdodsamp_eventlog_inst_section.entries[0].clone()).unwrap();
+    assert_eq!(key, "AddReg");
+    assert_eq!(value.unwrap(), InfValue::Raw("KDODSamp_EventLog_Inst.AddReg".to_string()));
+
+    // Test KDODSamp_EventLog_Inst.AddReg section
+    let kdodsamp_eventlog_inst_addreg_section = inf_file.sections.get("KDODSamp_EventLog_Inst.AddReg").unwrap();
+    let value = read_value_only(kdodsamp_eventlog_inst_addreg_section.entries[0].clone()).unwrap();
+    assert_eq!(value, InfValue::Raw("HKR,,EventMessageFile,%REG_EXPAND_SZ%,\"%%SystemRoot%%\\System32\\IoLogMsg.dll\"".to_string()));
+    let value = read_value_only(kdodsamp_eventlog_inst_addreg_section.entries[1].clone()).unwrap();
+    assert_eq!(value, InfValue::Raw("HKR,,TypesSupported,%REG_DWORD%,7".to_string()));
+
+    // Test Strings section
+    let strings_section = inf_file.sections.get("Strings").unwrap();
+    // There are 20 entries in the [Strings] section (7 localizable, 13 non-localizable)
+    assert_eq!(strings_section.entries.len(), 17);
+
+    // Check a few string values
+    let (key, value) = read_key_value(strings_section.entries[0].clone()).unwrap();
+    assert_eq!(key, "ProviderString");
+    assert_eq!(value.unwrap(), InfValue::Raw("TODO-Set-Provider".to_string()));
+    let (key, value) = read_key_value(strings_section.entries[1].clone()).unwrap();
+    assert_eq!(key, "ManufacturerName");
+    assert_eq!(value.unwrap(), InfValue::Raw("TODO-Set-Manufacturer".to_string()));
+    let (key, value) = read_key_value(strings_section.entries[2].clone()).unwrap();
+    assert_eq!(key, "SampleDisk");
+    assert_eq!(value.unwrap(), InfValue::Raw("Sample Disk".to_string()));
+    let (key, value) = read_key_value(strings_section.entries[3].clone()).unwrap();
+    assert_eq!(key, "SampleDeviceName");
+    assert_eq!(value.unwrap(), InfValue::Raw("Kernel mode display only sample driver".to_string()));
+    let (key, value) = read_key_value(strings_section.entries[4].clone()).unwrap();
+    assert_eq!(key, "SERVICE_BOOT_START");
+    assert_eq!(value.unwrap(), InfValue::Raw("0x0".to_string()));
+    let (key, value) = read_key_value(strings_section.entries[5].clone()).unwrap();
+    assert_eq!(key, "SERVICE_SYSTEM_START");
+    assert_eq!(value.unwrap(), InfValue::Raw("0x1".to_string()));
+    let (key, value) = read_key_value(strings_section.entries[6].clone()).unwrap();
+    assert_eq!(key, "SERVICE_AUTO_START");
+    assert_eq!(value.unwrap(), InfValue::Raw("0x2".to_string()));
+    let (key, value) = read_key_value(strings_section.entries[7].clone()).unwrap();
+    assert_eq!(key, "SERVICE_DEMAND_START");
+    assert_eq!(value.unwrap(), InfValue::Raw("0x3".to_string()));
+    let (key, value) = read_key_value(strings_section.entries[8].clone()).unwrap();
+    assert_eq!(key, "SERVICE_DISABLED");
+    assert_eq!(value.unwrap(), InfValue::Raw("0x4".to_string()));
+    let (key, value) = read_key_value(strings_section.entries[9].clone()).unwrap();
+    assert_eq!(key, "SERVICE_KERNEL_DRIVER");
+    assert_eq!(value.unwrap(), InfValue::Raw("0x1".to_string()));
+    let (key, value) = read_key_value(strings_section.entries[10].clone()).unwrap();
+    assert_eq!(key, "SERVICE_ERROR_IGNORE");
+    assert_eq!(value.unwrap(), InfValue::Raw("0x0".to_string()));
+    let (key, value) = read_key_value(strings_section.entries[11].clone()).unwrap();
+    assert_eq!(key, "SERVICE_ERROR_NORMAL");
+    assert_eq!(value.unwrap(), InfValue::Raw("0x1".to_string()));
+    let (key, value) = read_key_value(strings_section.entries[12].clone()).unwrap();
+    assert_eq!(key, "SERVICE_ERROR_SEVERE");
+    assert_eq!(value.unwrap(), InfValue::Raw("0x2".to_string()));
+    let (key, value) = read_key_value(strings_section.entries[13].clone()).unwrap();
+    assert_eq!(key, "SERVICE_ERROR_CRITICAL");
+    assert_eq!(value.unwrap(), InfValue::Raw("0x3".to_string()));
+    let (key, value) = read_key_value(strings_section.entries[14].clone()).unwrap();
+    assert_eq!(key, "REG_MULTI_SZ");
+    assert_eq!(value.unwrap(), InfValue::Raw("0x00010000".to_string()));
+    let (key, value) = read_key_value(strings_section.entries[15].clone()).unwrap();
+    assert_eq!(key, "REG_EXPAND_SZ");
+    assert_eq!(value.unwrap(), InfValue::Raw("0x00020000".to_string()));
+    let (key, value) = read_key_value(strings_section.entries[16].clone()).unwrap();
+    assert_eq!(key, "REG_DWORD");
+    assert_eq!(value.unwrap(), InfValue::Raw("0x00010001".to_string()));
+}
+
+#[test]
 fn test_inf_file_not_found() {
     let mut inf_file = WinInfFile::default();
     let inf_path = PathBuf::from("tests/fixtures/nonexistent.inf");
@@ -242,7 +460,7 @@ fn test_inf_file_not_found() {
 #[test]
 fn test_inf_file_non_existent_section() {
     let mut inf_file = WinInfFile::default();
-    let inf_path = PathBuf::from("tests/fixtures/Intel.inf");
+    let inf_path = PathBuf::from("tests/fixtures/sampledisplay.inf");
     
     // Test invalid section name
     assert!(inf_file.parse(inf_path).is_ok());
