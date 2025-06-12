@@ -1,3 +1,4 @@
+#![allow(clippy::collapsible_if)]
 #![feature(str_from_utf16_endian)]
 
 use std::collections::HashMap;
@@ -79,11 +80,11 @@ impl LineReader {
         for c in self.remaining_string.chars().chain(line_part.chars()) {
             // If LF did not follow CR, fail
             if found_cr && c != '\n' {
-                return Err(LineReaderError::InvalidCrlf(format!("found \\r but not \\n immediately")));
+                return Err(LineReaderError::InvalidCrlf("found \\r but not \\n immediately".to_string()));
             }
             // If CRLF encountered, read to line
             if found_cr && c == '\n' {
-                if new_line.len() != 0 {
+                if !new_line.is_empty() {
                     self.lines.push(new_line.clone());
                     new_line.clear();
                 }
@@ -99,7 +100,7 @@ impl LineReader {
 
             // If \n encountered, read to line
             if c == '\n' {
-                if new_line.len() != 0 {
+                if !new_line.is_empty() {
                     self.lines.push(new_line.clone());
                     new_line.clear();
                 }
@@ -164,7 +165,7 @@ impl SectionReader {
                 let mut value = value.trim();
 
                 if value.starts_with('"') {
-                    debug!("processing quoted value: {}", value);
+                    debug!("processing quoted value: {value}");
                     let end_double_quote_idx = value[1..].find('"');
                     if end_double_quote_idx.is_none() {
                         return Err(SectionReaderError::InvalidQuotedValue(format!(
@@ -196,12 +197,11 @@ impl SectionReader {
                     // exclude double quotes
                     value = &value[1..end_double_quote_idx];
                     if let Some(section) = sections.get_mut(&self.last_section_name) {
-                        let new_entry = InfEntry::KeyValue(key.to_string(), Some(InfValue::Raw(value.to_string())) );
+                        let new_entry = InfEntry::KeyValue(key.to_string(), Some(InfValue::Raw(value.to_string())));
                         section.entries.push(new_entry);
                     }
-
                 } else {
-                    debug!("processing unquoted value: {}", value);
+                    debug!("processing unquoted value: {value}");
 
                     // value containing comments at the end
                     if let Some((first, _)) = value.split_once(';') {
@@ -210,7 +210,7 @@ impl SectionReader {
 
                     // multiple backslashes at the end, windows treat only the last one as line continuator and ignores rest
                     if value.ends_with('\\') {
-                        debug!("processing unquoted contd value: {}", value);
+                        debug!("processing unquoted contd value: {value}");
                         if let Some(first_backslash_idx) = value.find('\\') {
                             if first_backslash_idx > 0 {
                                 self.last_entry_value_contd = value[..first_backslash_idx].to_string();
@@ -223,7 +223,7 @@ impl SectionReader {
                             }
                         }
                     } else {
-                        debug!("processing unquoted non contd value: {}", value);
+                        debug!("processing unquoted non contd value: {value}");
                         self.last_entry_value_contd.clear();
                         self.last_entry_key.clear();
 
@@ -247,10 +247,8 @@ impl SectionReader {
                     }
                     self.last_entry_value_contd.clear();
                     self.last_entry_key.clear();
-                } else {
-                    if let Some(entry) = sections.get_mut(&self.last_section_name) {
-                        entry.entries.push(InfEntry::OnlyValue(InfValue::Raw(value.to_string())));
-                    }
+                } else if let Some(entry) = sections.get_mut(&self.last_section_name) {
+                    entry.entries.push(InfEntry::OnlyValue(InfValue::Raw(value.to_string())));
                 }
             }
         }
@@ -299,8 +297,8 @@ impl WinInfFile {
                 return Err(WinInfFileError::FileReadError);
             }
             let read_count = read_count.unwrap();
-            if read_count <= 0 {
-                trace!("bytes read: {}", read_count);
+            if read_count == 0 {
+                trace!("bytes read: {read_count}");
                 break;
             }
 
@@ -323,7 +321,7 @@ impl WinInfFile {
                 }
             } else {
                 debug!("decoded chars: {:?}", String::from_utf8_lossy(&buf[..read_count]));
-                if let Err(e) = line_reader.read_to_line(&String::from_utf8_lossy(&buf[..read_count]).to_string()) {
+                if let Err(e) = line_reader.read_to_line(String::from_utf8_lossy(&buf[..read_count]).as_ref()) {
                     return Err(WinInfFileError::ReadLineError(e));
                 }
             }
@@ -344,11 +342,11 @@ impl WinInfFile {
 
         debug!("total lines: {}", line_reader.lines.len());
         for line in line_reader.lines.iter() {
-            debug!(">> line: {}", line);
+            debug!(">> line: {line}");
         }
 
         for (section_name, section) in self.sections.iter() {
-            debug!(">> section name: {}, section: {:?}", section_name, section);
+            debug!(">> section name: {section_name}, section: {section:?}");
         }
 
         Ok(())
@@ -356,7 +354,7 @@ impl WinInfFile {
 }
 
 fn validate_section_name<'a>(name: String) -> Result<(), &'a str> {
-    debug!("validate section name: {}", name);
+    debug!("validate section name: {name}");
     if name.starts_with('\"') {
         // quoted section name
         // double quotes within are also allowed when escaped
@@ -381,11 +379,8 @@ fn validate_section_name<'a>(name: String) -> Result<(), &'a str> {
 
         name.find(|c| {
             // TODO: Also prevent invisible control characters here
-            if c == '\r' || c == '\n' || c == '\"' || c == ' '
-                || c == '\t' || c == '[' || c == ']' || c == ';' {
-                return true;
-            }
-            return false;
+            c == '\r' || c == '\n' || c == '\"' || c == ' '
+                || c == '\t' || c == '[' || c == ']' || c == ';'
         }).map_or_else(|| Ok(()), |_| Err("contains invalid chars in unquoted section name"))
     }
 }

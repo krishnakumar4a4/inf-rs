@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 /// A value in a Windows INF file
 /// 
 /// Values can be either raw strings or lists of strings.
@@ -50,10 +48,4 @@ pub struct InfSection {
     pub name: String,
     /// The entries contained in this section
     pub entries: Vec<InfEntry>,
-}
-
-#[derive(Debug, PartialEq)]
-pub struct InfFile {
-    pub sections: HashMap<String, InfSection>,
-    pub strings: HashMap<String, String>,
 }
