@@ -56,20 +56,20 @@ pub enum SectionReaderError {
 }
 
 /// A Windows INF file parser
-/// 
+///
 /// This struct provides functionality to parse Windows INF files and access their contents.
 /// INF files are used for device driver installation and configuration in Windows.
 #[derive(Default)]
 pub struct WinInfFile {
     /// The sections contained in the INF file
     pub sections: HashMap<String, InfSection>,
-    section_reader: SectionReader
+    section_reader: SectionReader,
 }
 
 #[derive(Default)]
 struct LineReader {
     pub remaining_string: String,
-    pub lines: Vec<String>
+    pub lines: Vec<String>,
 }
 
 impl LineReader {
@@ -80,7 +80,9 @@ impl LineReader {
         for c in self.remaining_string.chars().chain(line_part.chars()) {
             // If LF did not follow CR, fail
             if found_cr && c != '\n' {
-                return Err(LineReaderError::InvalidCrlf("found \\r but not \\n immediately".to_string()));
+                return Err(LineReaderError::InvalidCrlf(
+                    "found \\r but not \\n immediately".to_string(),
+                ));
             }
             // If CRLF encountered, read to line
             if found_cr && c == '\n' {
@@ -89,13 +91,13 @@ impl LineReader {
                     new_line.clear();
                 }
                 found_cr = false;
-                continue
+                continue;
             }
 
             // If CR encountered, set flag
             if c == '\r' {
                 found_cr = true;
-                continue
+                continue;
             }
 
             // If \n encountered, read to line
@@ -104,7 +106,7 @@ impl LineReader {
                     self.lines.push(new_line.clone());
                     new_line.clear();
                 }
-                continue
+                continue;
             }
 
             // Add each char to the new line
@@ -131,11 +133,15 @@ impl LineReader {
 struct SectionReader {
     last_section_name: String,
     last_entry_key: String,
-    last_entry_value_contd: String
+    last_entry_value_contd: String,
 }
 
 impl SectionReader {
-    fn read_section(&mut self, line: String, sections: &mut HashMap<String, InfSection>) -> Result<(), SectionReaderError> {
+    fn read_section(
+        &mut self,
+        line: String,
+        sections: &mut HashMap<String, InfSection>,
+    ) -> Result<(), SectionReaderError> {
         // trim spaces and tabs
         let line = line.trim();
 
@@ -146,20 +152,29 @@ impl SectionReader {
 
         // section name
         if line.starts_with('[') && line.ends_with(']') {
-            let section_name = line[1..line.len()-1].to_string();
+            let section_name = line[1..line.len() - 1].to_string();
             if let Err(e) = validate_section_name(section_name.clone()) {
                 return Err(SectionReaderError::InvalidSectionName(e.to_string()));
             }
 
             // TODO: if there are multiple sections with same name, we have to merge them
-            sections.insert(section_name.clone(), InfSection{ name: section_name.clone(), entries: vec![] });
+            sections.insert(
+                section_name.clone(),
+                InfSection {
+                    name: section_name.clone(),
+                    entries: vec![],
+                },
+            );
             self.last_section_name = section_name.clone();
             return Ok(());
         }
 
         // entries
         if !self.last_section_name.is_empty() {
-            debug!("processing entries for section name: {}", self.last_section_name);
+            debug!(
+                "processing entries for section name: {}",
+                self.last_section_name
+            );
             if let Some((key, value)) = line.split_once('=') {
                 let key = key.trim();
                 let mut value = value.trim();
@@ -169,24 +184,25 @@ impl SectionReader {
                     let end_double_quote_idx = value[1..].find('"');
                     if end_double_quote_idx.is_none() {
                         return Err(SectionReaderError::InvalidQuotedValue(format!(
-                            "no ending double quote found, key: {}, section: {}", 
+                            "no ending double quote found, key: {}, section: {}",
                             key, self.last_section_name
                         )));
                     }
                     // +1 to include the first double quote
-                    let end_double_quote_idx = end_double_quote_idx.unwrap()+1usize;
+                    let end_double_quote_idx = end_double_quote_idx.unwrap() + 1usize;
                     // check for continuation char, -1 of length since its zero based
-                    if value.len()-1usize > end_double_quote_idx {
+                    if value.len() - 1usize > end_double_quote_idx {
                         if let Some(c) = value.chars().nth(end_double_quote_idx + 1usize) {
-                        // check if the char after ending double quote is continuation char
+                            // check if the char after ending double quote is continuation char
                             if c == '\\' {
                                 self.last_entry_key = key.to_string();
-                                self.last_entry_value_contd = value[1..end_double_quote_idx].to_string();
+                                self.last_entry_value_contd =
+                                    value[1..end_double_quote_idx].to_string();
                                 return Ok(());
                             } else if c != ';' {
                                 // TODO: if there are any chars after ending double quote apart from continuation char or comment, should we consider this as malformed value?
                                 return Err(SectionReaderError::InvalidContinuation(format!(
-                                    "Invalid INF entry value: {}, no continuation char found after ending double quote, key: {}, section_name: {}", 
+                                    "Invalid INF entry value: {}, no continuation char found after ending double quote, key: {}, section_name: {}",
                                     value, key, self.last_section_name
                                 )));
                             }
@@ -197,7 +213,10 @@ impl SectionReader {
                     // exclude double quotes
                     value = &value[1..end_double_quote_idx];
                     if let Some(section) = sections.get_mut(&self.last_section_name) {
-                        let new_entry = InfEntry::KeyValue(key.to_string(), Some(InfValue::Raw(value.to_string())));
+                        let new_entry = InfEntry::KeyValue(
+                            key.to_string(),
+                            Some(InfValue::Raw(value.to_string())),
+                        );
                         section.entries.push(new_entry);
                     }
                 } else {
@@ -213,13 +232,14 @@ impl SectionReader {
                         debug!("processing unquoted contd value: {value}");
                         if let Some(first_backslash_idx) = value.find('\\') {
                             if first_backslash_idx > 0 {
-                                self.last_entry_value_contd = value[..first_backslash_idx].to_string();
+                                self.last_entry_value_contd =
+                                    value[..first_backslash_idx].to_string();
                                 self.last_entry_key = key.to_string();
-                                return Ok(())
+                                return Ok(());
                             } else {
                                 self.last_entry_value_contd.clear();
                                 self.last_entry_key.clear();
-                                return Ok(())
+                                return Ok(());
                             }
                         }
                     } else {
@@ -228,12 +248,14 @@ impl SectionReader {
                         self.last_entry_key.clear();
 
                         if let Some(entry) = sections.get_mut(&self.last_section_name) {
-                            entry.entries.push(InfEntry::KeyValue(key.to_string(), Some(InfValue::Raw(value.to_string())) ))
+                            entry.entries.push(InfEntry::KeyValue(
+                                key.to_string(),
+                                Some(InfValue::Raw(value.to_string())),
+                            ))
                         }
                     }
                 }
-            }
-            else {
+            } else {
                 let value = line.trim();
 
                 // TODO: what if there are multiple continuation lines?
@@ -241,14 +263,16 @@ impl SectionReader {
                     if let Some(entry) = sections.get_mut(&self.last_section_name) {
                         self.last_entry_value_contd.push_str(value);
                         entry.entries.push(InfEntry::KeyValue(
-                            self.last_entry_key.to_string(), 
-                            Some(InfValue::Raw(self.last_entry_value_contd.clone()))
+                            self.last_entry_key.to_string(),
+                            Some(InfValue::Raw(self.last_entry_value_contd.clone())),
                         ));
                     }
                     self.last_entry_value_contd.clear();
                     self.last_entry_key.clear();
                 } else if let Some(entry) = sections.get_mut(&self.last_section_name) {
-                    entry.entries.push(InfEntry::OnlyValue(InfValue::Raw(value.to_string())));
+                    entry
+                        .entries
+                        .push(InfEntry::OnlyValue(InfValue::Raw(value.to_string())));
                 }
             }
         }
@@ -258,22 +282,22 @@ impl SectionReader {
 
 impl WinInfFile {
     /// Parse a Windows INF file from the given path
-    /// 
+    ///
     /// # Arguments
-    /// 
+    ///
     /// * `file_path` - The path to the INF file to parse
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     /// * `Ok(())` if the file was parsed successfully
     /// * `Err(WinInfFileError)` if an error occurred during parsing
-    /// 
+    ///
     /// # Examples
-    /// 
+    ///
     /// ```
     /// use inf_rs::WinInfFile;
     /// use std::path::PathBuf;
-    /// 
+    ///
     /// let mut inf_file = WinInfFile::default();
     /// let result = inf_file.parse(PathBuf::from("tests/fixtures/sampledisplay.inf"));
     /// assert!(result.is_ok());
@@ -313,15 +337,29 @@ impl WinInfFile {
             if bom_detected {
                 // This works perfectly for UTF16 LE
                 // Ref: https://learn.microsoft.com/en-us/windows-hardware/drivers/display/general-unicode-requirement
-                let mut utf16_buf = vec![0; buf_size/2];
-                let res = decoder.decode_to_utf16(&buf[..read_count], &mut utf16_buf, read_count != buf_size);
-                debug!("decoded chars: {:?}", String::from_utf16_lossy(&utf16_buf[..res.2]));
-                if let Err(e) = line_reader.read_to_line(&String::from_utf16_lossy(&utf16_buf[..res.2])) {
+                let mut utf16_buf = vec![0; buf_size / 2];
+                let res = decoder.decode_to_utf16(
+                    &buf[..read_count],
+                    &mut utf16_buf,
+                    read_count != buf_size,
+                );
+                debug!(
+                    "decoded chars: {:?}",
+                    String::from_utf16_lossy(&utf16_buf[..res.2])
+                );
+                if let Err(e) =
+                    line_reader.read_to_line(&String::from_utf16_lossy(&utf16_buf[..res.2]))
+                {
                     return Err(WinInfFileError::ReadLineError(e));
                 }
             } else {
-                debug!("decoded chars: {:?}", String::from_utf8_lossy(&buf[..read_count]));
-                if let Err(e) = line_reader.read_to_line(String::from_utf8_lossy(&buf[..read_count]).as_ref()) {
+                debug!(
+                    "decoded chars: {:?}",
+                    String::from_utf8_lossy(&buf[..read_count])
+                );
+                if let Err(e) =
+                    line_reader.read_to_line(String::from_utf8_lossy(&buf[..read_count]).as_ref())
+                {
                     return Err(WinInfFileError::ReadLineError(e));
                 }
             }
@@ -379,9 +417,19 @@ fn validate_section_name<'a>(name: String) -> Result<(), &'a str> {
 
         name.find(|c| {
             // TODO: Also prevent invisible control characters here
-            c == '\r' || c == '\n' || c == '\"' || c == ' '
-                || c == '\t' || c == '[' || c == ']' || c == ';'
-        }).map_or_else(|| Ok(()), |_| Err("contains invalid chars in unquoted section name"))
+            c == '\r'
+                || c == '\n'
+                || c == '\"'
+                || c == ' '
+                || c == '\t'
+                || c == '['
+                || c == ']'
+                || c == ';'
+        })
+        .map_or_else(
+            || Ok(()),
+            |_| Err("contains invalid chars in unquoted section name"),
+        )
     }
 }
 
@@ -427,12 +475,20 @@ mod tests {
         let mut sections = HashMap::new();
 
         // Test section header
-        assert!(reader.read_section("[TestSection]".to_string(), &mut sections).is_ok());
+        assert!(
+            reader
+                .read_section("[TestSection]".to_string(), &mut sections)
+                .is_ok()
+        );
         assert_eq!(reader.last_section_name, "TestSection");
         assert!(sections.contains_key("TestSection"));
 
         // Test key-value pair
-        assert!(reader.read_section("key=value".to_string(), &mut sections).is_ok());
+        assert!(
+            reader
+                .read_section("key=value".to_string(), &mut sections)
+                .is_ok()
+        );
         let section = sections.get("TestSection").unwrap();
         assert_eq!(section.entries.len(), 1);
         if let InfEntry::KeyValue(key, value) = &section.entries[0] {
@@ -448,14 +504,25 @@ mod tests {
         let mut reader = SectionReader::default();
         let mut sections = HashMap::new();
 
-        assert!(reader.read_section("[TestSection]".to_string(), &mut sections).is_ok());
-        assert!(reader.read_section("key=\"quoted value\"".to_string(), &mut sections).is_ok());
-        
+        assert!(
+            reader
+                .read_section("[TestSection]".to_string(), &mut sections)
+                .is_ok()
+        );
+        assert!(
+            reader
+                .read_section("key=\"quoted value\"".to_string(), &mut sections)
+                .is_ok()
+        );
+
         let section = sections.get("TestSection").unwrap();
         assert_eq!(section.entries.len(), 1);
         if let InfEntry::KeyValue(key, value) = &section.entries[0] {
             assert_eq!(key, "key");
-            assert_eq!(value.as_ref().unwrap(), &InfValue::Raw("quoted value".to_string()));
+            assert_eq!(
+                value.as_ref().unwrap(),
+                &InfValue::Raw("quoted value".to_string())
+            );
         } else {
             panic!("Expected KeyValue entry");
         }
@@ -466,17 +533,32 @@ mod tests {
         let mut reader = SectionReader::default();
         let mut sections = HashMap::new();
 
-        assert!(reader.read_section("[TestSection]".to_string(), &mut sections).is_ok());
-        assert!(reader.read_section("key=\"quoted value\\\"\\".to_string(), &mut sections).is_ok());
+        assert!(
+            reader
+                .read_section("[TestSection]".to_string(), &mut sections)
+                .is_ok()
+        );
+        assert!(
+            reader
+                .read_section("key=\"quoted value\\\"\\".to_string(), &mut sections)
+                .is_ok()
+        );
         assert_eq!(reader.last_entry_value_contd, "quoted value\\");
         assert_eq!(reader.last_entry_key, "key");
 
-        assert!(reader.read_section("  continued value  ".to_string(), &mut sections).is_ok());
+        assert!(
+            reader
+                .read_section("  continued value  ".to_string(), &mut sections)
+                .is_ok()
+        );
         let section = sections.get("TestSection").unwrap();
         assert_eq!(section.entries.len(), 1);
         if let InfEntry::KeyValue(key, value) = &section.entries[0] {
             assert_eq!(key, "key");
-            assert_eq!(value.as_ref().unwrap(), &InfValue::Raw("quoted value\\continued value".to_string()));
+            assert_eq!(
+                value.as_ref().unwrap(),
+                &InfValue::Raw("quoted value\\continued value".to_string())
+            );
         } else {
             panic!("Expected KeyValue entry");
         }
@@ -487,16 +569,31 @@ mod tests {
         let mut reader = SectionReader::default();
         let mut sections = HashMap::new();
 
-        assert!(reader.read_section("[TestSection]".to_string(), &mut sections).is_ok());
-        assert!(reader.read_section("key=value\\".to_string(), &mut sections).is_ok());
+        assert!(
+            reader
+                .read_section("[TestSection]".to_string(), &mut sections)
+                .is_ok()
+        );
+        assert!(
+            reader
+                .read_section("key=value\\".to_string(), &mut sections)
+                .is_ok()
+        );
         assert_eq!(reader.last_entry_value_contd, "value");
-        
-        assert!(reader.read_section("continued".to_string(), &mut sections).is_ok());
+
+        assert!(
+            reader
+                .read_section("continued".to_string(), &mut sections)
+                .is_ok()
+        );
         let section = sections.get("TestSection").unwrap();
         assert_eq!(section.entries.len(), 1);
         if let InfEntry::KeyValue(key, value) = &section.entries[0] {
             assert_eq!(key, "key");
-            assert_eq!(value.as_ref().unwrap(), &InfValue::Raw("valuecontinued".to_string()));
+            assert_eq!(
+                value.as_ref().unwrap(),
+                &InfValue::Raw("valuecontinued".to_string())
+            );
         } else {
             panic!("Expected KeyValue entry");
         }
@@ -507,10 +604,22 @@ mod tests {
         let mut reader = SectionReader::default();
         let mut sections = HashMap::new();
 
-        assert!(reader.read_section("[TestSection]".to_string(), &mut sections).is_ok());
-        assert!(reader.read_section("; This is a comment".to_string(), &mut sections).is_ok());
-        assert!(reader.read_section("key=value ; This is a comment".to_string(), &mut sections).is_ok());
-        
+        assert!(
+            reader
+                .read_section("[TestSection]".to_string(), &mut sections)
+                .is_ok()
+        );
+        assert!(
+            reader
+                .read_section("; This is a comment".to_string(), &mut sections)
+                .is_ok()
+        );
+        assert!(
+            reader
+                .read_section("key=value ; This is a comment".to_string(), &mut sections)
+                .is_ok()
+        );
+
         let section = sections.get("TestSection").unwrap();
         assert_eq!(section.entries.len(), 1);
         if let InfEntry::KeyValue(key, value) = &section.entries[0] {
@@ -526,7 +635,15 @@ mod tests {
         let mut reader = SectionReader::default();
         let mut sections = HashMap::new();
 
-        assert!(reader.read_section("[Invalid Section]".to_string(), &mut sections).is_err());
-        assert!(reader.read_section("[Section with \\]".to_string(), &mut sections).is_err());
+        assert!(
+            reader
+                .read_section("[Invalid Section]".to_string(), &mut sections)
+                .is_err()
+        );
+        assert!(
+            reader
+                .read_section("[Section with \\]".to_string(), &mut sections)
+                .is_err()
+        );
     }
 }
