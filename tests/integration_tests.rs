@@ -233,7 +233,7 @@ fn test_audiocodec_inf_parsing() {
 #[test]
 fn test_sampledisplay_inf_parsing() {
     let mut inf_file = WinInfFile::default();
-    let inf_path = PathBuf::from("tests/fixtures/SampleDisplay.inf");
+    let inf_path = PathBuf::from("tests/fixtures/sampledisplay.inf");
     
     // Test basic parsing
     assert!(inf_file.parse(inf_path).is_ok());
