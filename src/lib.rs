@@ -277,7 +277,7 @@ impl WinInfFile {
     /// use std::path::PathBuf;
     /// 
     /// let mut inf_file = WinInfFile::default();
-    /// let result = inf_file.parse(PathBuf::from("tests/fixtures/Intel.inf"));
+    /// let result = inf_file.parse(PathBuf::from("tests/fixtures/sampledisplay.inf"));
     /// assert!(result.is_ok());
     /// ```
     pub fn parse(&mut self, file_path: PathBuf) -> Result<(), WinInfFileError> {
